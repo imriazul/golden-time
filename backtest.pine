@@ -1,0 +1,50 @@
+//@version=5
+strategy("Golden Time by @imriazul", overlay=true)
+
+// ===== USER INPUTS =====
+entryHour   = input.int(19, "Entry Candle Hour (BD Time)", tooltip="Hour of the entry candle in Asia/Dhaka timezone. Example: 19 = 7 PM")
+entryMinute = input.int(30, "Entry Candle Minute", tooltip="Minute of the entry candle. Example: 30 = 7:30 PM")
+
+useManualSL = input.bool(true, "Use Manual SL ONLY", tooltip="ON = Manual SL. OFF = Ignore manual SL and auto-calculate SL based on algorithm")
+manualSL    = input.float(10.0, "Manual SL (Points)", step=0.1, tooltip="SL in points not Pips so if you want to use Pips calculate according to points. It will Only work when Manual SL enabled")
+
+tpMultiplier = input.float(1.5, "TP Multiplier", tooltip="Risk to Reword (2 means 1:2 and 3 means 1:3 RR)")
+
+// ===== TIMEZONE =====
+tz = "Asia/Dhaka"
+
+// ===== TIME EXTRACTION =====
+h = hour(time, tz)
+m = minute(time, tz)
+
+// ===== ENTRY CANDLE =====
+isEntryCandle = (h == entryHour and m == entryMinute)
+
+// ===== AUTO SL SOURCE (7:00 PM CANDLE) =====
+isAutoSLCandle = (h == 19 and m == 0)
+
+var float autoSL = na
+if isAutoSLCandle
+    autoSL := high - low
+
+// ===== FINAL SL SELECTION (STRICT) =====
+float slValue = na
+if useManualSL
+    slValue := manualSL
+else
+    slValue := autoSL
+
+// ===== ENTRY LOGIC =====
+if isEntryCandle and not na(slValue)
+    if close > open
+        entry = close
+        sl = entry - slValue
+        tp = entry + (slValue * tpMultiplier)
+        strategy.entry("Long", strategy.long)
+        strategy.exit("Long Exit", "Long", stop=sl, limit=tp)
+    else if close < open
+        entry = close
+        sl = entry + slValue
+        tp = entry - (slValue * tpMultiplier)
+        strategy.entry("Short", strategy.short)
+        strategy.exit("Short Exit", "Short", stop=sl, limit=tp)
