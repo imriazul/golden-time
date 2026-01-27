@@ -1,0 +1,78 @@
+//@version=5
+strategy("Golden Time by @imriazul", overlay=true)
+
+// ===== USER INPUTS =====
+tfInput = input.string("5", "Candle Timeframe (Minutes)", options=["3", "5", "15"], tooltip="Select the candle timeframe. Chart timeframe MUST match this value")
+
+startHour   = input.int(19, "Start Candle Hour (BD Time)", tooltip="Start candle hour in Asia/Dhaka timezone. Example: 19 = 7 PM")
+startMinute = input.int(30, "Start Candle Minute", tooltip="Start candle minute. Example: 30 = 7:30 PM")
+
+endHour     = input.int(19, "End Candle Hour (BD Time)", tooltip="End candle hour in Asia/Dhaka timezone. Example: 19 = 7 PM")
+endMinute   = input.int(35, "End Candle Minute", tooltip="End candle minute. Example: 35 = 7:35 PM")
+
+useManualSL = input.bool(true, "Use Manual SL ONLY", tooltip="ON = Manual SL. OFF = Auto SL from 7:00 PM candle")
+manualSL    = input.float(10.0, "Manual SL (Points)", step=0.1, tooltip="SL in points (not pips). Works only when Manual SL is enabled")
+
+tpMultiplier = input.float(1.5, "TP Multiplier", tooltip="Risk to Reward. Example: 2 = 1:2 RR")
+
+// ===== TIMEFRAME VALIDATION =====
+selectedTF = tfInput == "3" ? 3 : tfInput == "5" ? 5 : 15
+isValidTF  = timeframe.isintraday and timeframe.multiplier == selectedTF
+
+// ===== TIMEZONE =====
+tz = "Asia/Dhaka"
+
+// ===== TIME EXTRACTION =====
+h = hour(time, tz)
+m = minute(time, tz)
+
+// ===== TIME CONDITIONS =====
+isStartCandle = (h == startHour and m == startMinute)
+isEndCandle   = (h == endHour and m == endMinute)
+isBlendRange  = isValidTF and (time >= timestamp(tz, year, month, dayofmonth, startHour, startMinute)) and (time <= timestamp(tz, year, month, dayofmonth, endHour, endMinute))
+
+// ===== BLENDED CANDLE STORAGE =====
+var float blendOpen  = na
+var float blendHigh  = na
+var float blendLow   = na
+var float blendClose = na
+
+if isStartCandle and isValidTF
+    blendOpen := open
+    blendHigh := high
+    blendLow  := low
+
+if isBlendRange
+    blendHigh := math.max(blendHigh, high)
+    blendLow  := math.min(blendLow, low)
+
+if isEndCandle and isValidTF
+    blendClose := close
+
+// ===== AUTO SL SOURCE (7:00 PM CANDLE) =====
+isAutoSLCandle = (h == 20 and m == 0)
+var float autoSL = na
+if isAutoSLCandle
+    autoSL := high - low
+
+// ===== FINAL SL SELECTION =====
+float slValue = na
+if useManualSL
+    slValue := manualSL
+else
+    slValue := autoSL
+
+// ===== ENTRY LOGIC =====
+if isValidTF and isEndCandle and not na(blendOpen) and not na(blendClose) and not na(slValue)
+    if blendClose > blendOpen
+        entry = close
+        sl = entry - slValue
+        tp = entry + (slValue * tpMultiplier)
+        strategy.entry("Long", strategy.long)
+        strategy.exit("Long Exit", "Long", stop=sl, limit=tp)
+    else if blendClose < blendOpen
+        entry = close
+        sl = entry + slValue
+        tp = entry - (slValue * tpMultiplier)
+        strategy.entry("Short", strategy.short)
+        strategy.exit("Short Exit", "Short", stop=sl, limit=tp)
