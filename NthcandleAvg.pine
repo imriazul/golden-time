@@ -1,0 +1,22 @@
+//@version=5
+indicator("Avg last 9 candles (SMA) at Time – BD", overlay=true)
+
+// INPUT
+inputHour   = input.int(7, "Hour (BD)", minval=0, maxval=23)
+inputMinute = input.int(30, "Minute (BD)", minval=0, maxval=59)
+
+// BD TIME
+bdHour   = hour(time, "Asia/Dhaka")
+bdMinute = minute(time, "Asia/Dhaka")
+
+isTarget = (bdHour == inputHour and bdMinute == inputMinute)
+
+// CANDLE SIZE (POINTS)
+candleSize = high - low
+
+// SMA of last 9 candles
+avg9 = ta.sma(candleSize, 9)
+
+// SHOW ONLY AT TARGET CANDLE
+if isTarget and not na(avg9)
+    label.new(bar_index, high,text= str.tostring(avg9, "#.##"), style=label.style_label_down,textcolor=color.white)
