@@ -1,0 +1,120 @@
+//@version=5
+strategy("Golden Time by @imriazul", overlay=true)
+
+// =====================================================
+// USER INPUTS
+// =====================================================
+entryHour   = input.int(7,  "Entry Candle Hour (BD Time)")
+entryMinute = input.int(10, "Entry Candle Minute")
+
+useManualSL = input.bool(true, "Use Manual SL ONLY")
+manualSL    = input.float(10.0, "Manual SL (Points)", step=0.1)
+
+tpMultiplier = input.float(2, "TP Multiplier")
+
+// =====================================================
+// TIMEZONE & TIME EXTRACTION
+// =====================================================
+tz = "Asia/Dhaka"
+h  = hour(time, tz)
+m  = minute(time, tz)
+
+// =====================================================
+// TRADE WINDOW: 7:00 AM → 2:00 PM (BD)
+// =====================================================
+isAfter7AM   = (h > 7) or (h == 7 and m >= 0)
+isBefore2PM  = (h < 14) or (h == 14 and m == 0)
+isInWindow   = isAfter7AM and isBefore2PM
+
+// =====================================================
+// ENTRY CANDLE
+// =====================================================
+isEntryCandle = (h == entryHour and m == entryMinute)
+
+// =====================================================
+// AUTO SL (AVG OF LAST 9 CANDLE RANGES)
+// =====================================================
+candleSize = high - low
+avg9       = ta.sma(candleSize, 9)
+slValue    = useManualSL ? manualSL : avg9
+
+// =====================================================
+// ENTRY PRICE (MID OF ENTRY + PREVIOUS CANDLE)
+// =====================================================
+combinedHigh = math.max(high, high[1])
+combinedLow  = math.min(low, low[1])
+entryPrice   = (combinedHigh + combinedLow) / 2
+
+// =====================================================
+// LINE VARIABLES
+// =====================================================
+var line entryLine = na
+var line slLine    = na
+var line tpLine    = na
+
+// =====================================================
+// DAILY RESET (LINES)
+// =====================================================
+if ta.change(time("D"))
+    if not na(entryLine)
+        line.delete(entryLine)
+    if not na(slLine)
+        line.delete(slLine)
+    if not na(tpLine)
+        line.delete(tpLine)
+
+// =====================================================
+// CANCEL ORDERS OUTSIDE TIME WINDOW (CRITICAL)
+// =====================================================
+if not isInWindow
+    strategy.cancel("Long")
+    strategy.cancel("Short")
+
+// =====================================================
+// ENTRY LOGIC
+// =====================================================
+if isEntryCandle and isInWindow and not na(slValue)
+
+    // Remove previous lines (safety)
+    if not na(entryLine)
+        line.delete(entryLine)
+    if not na(slLine)
+        line.delete(slLine)
+    if not na(tpLine)
+        line.delete(tpLine)
+
+    // ================= LONG =================
+    if close > open
+        entryP = entryPrice
+        slP    = entryP - slValue
+        tpP    = entryP + (slValue * tpMultiplier)
+
+        strategy.entry("Long", strategy.long, limit=entryP)
+        strategy.exit("Long Exit", "Long", stop=slP, limit=tpP)
+
+        entryLine := line.new(bar_index, entryP, bar_index + 1, entryP,
+             extend=extend.right, color=color.yellow, width=2)
+
+        slLine := line.new(bar_index, slP, bar_index + 1, slP,
+             extend=extend.right, color=color.red, width=2)
+
+        tpLine := line.new(bar_index, tpP, bar_index + 1, tpP,
+             extend=extend.right, color=color.green, width=2)
+
+    // ================= SHORT =================
+    else if close < open
+        entryP = entryPrice
+        slP    = entryP + slValue
+        tpP    = entryP - (slValue * tpMultiplier)
+
+        strategy.entry("Short", strategy.short, limit=entryP)
+        strategy.exit("Short Exit", "Short", stop=slP, limit=tpP)
+
+        entryLine := line.new(bar_index, entryP, bar_index + 1, entryP,
+             extend=extend.right, color=color.yellow, width=2)
+
+        slLine := line.new(bar_index, slP, bar_index + 1, slP,
+             extend=extend.right, color=color.red, width=2)
+
+        tpLine := line.new(bar_index, tpP, bar_index + 1, tpP,
+             extend=extend.right, color=color.green, width=2)
