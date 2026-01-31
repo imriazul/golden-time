@@ -1,0 +1,90 @@
+//@version=5
+indicator("Golden Time Indicator with Avg9 Overlay", overlay=true)
+
+// =====================================================
+// USER INPUTS
+// =====================================================
+entryHour   = input.int(7,  "Entry Candle Hour (BD Time)")
+entryMinute = input.int(10, "Entry Candle Minute")
+
+useManualSL = input.bool(true, "Use Manual SL ONLY")
+manualSL    = input.float(10.0, "Manual SL (Points)", step=0.1)
+
+tpMultiplier = input.float(2, "TP Multiplier")
+
+// Avg9 Inputs
+avgHour   = input.int(7, "Avg9 Hour (BD)")
+avgMinute = input.int(10, "Avg9 Minute (BD)")
+
+// =====================================================
+// TIMEZONE & TIME EXTRACTION
+// =====================================================
+tz = "Asia/Dhaka"
+h  = hour(time, tz)
+m  = minute(time, tz)
+
+// =====================================================
+// TRADE WINDOW: 7:00 AM → 2:00 PM (BD)
+// =====================================================
+isAfter7AM   = (h > 7) or (h == 7 and m >= 0)
+isBefore2PM  = (h < 14) or (h == 14 and m == 0)
+isInWindow   = isAfter7AM and isBefore2PM
+
+// =====================================================
+// ENTRY CANDLE
+// =====================================================
+isEntryCandle = (h == entryHour and m == entryMinute)
+
+// =====================================================
+// AUTO SL (AVG OF LAST 9 CANDLE RANGES)
+// =====================================================
+candleSize = high - low
+avg9       = ta.sma(candleSize, 9)
+slValue    = useManualSL ? manualSL : avg9
+
+// =====================================================
+// ENTRY PRICE (MID OF ENTRY + PREVIOUS CANDLE)
+// =====================================================
+combinedHigh = math.max(high, high[1])
+combinedLow  = math.min(low, low[1])
+entryP       = (combinedHigh + combinedLow) / 2
+
+// =====================================================
+// VARIABLES TO HOLD PLOTS
+// =====================================================
+var float plotEntry = na
+var float plotSL    = na
+var float plotTP    = na
+
+// =====================================================
+// ENTRY LOGIC
+// =====================================================
+if isEntryCandle and isInWindow and not na(slValue)
+    if close > open
+        // LONG
+        plotEntry := entryP
+        plotSL    := entryP - slValue
+        plotTP    := entryP + (slValue * tpMultiplier)
+    else if close < open
+        // SHORT
+        plotEntry := entryP
+        plotSL    := entryP + slValue
+        plotTP    := entryP - (slValue * tpMultiplier)
+
+// =====================================================
+// PLOT LINES
+// =====================================================
+plot(plotEntry, "Entry", color=color.new(#f805ec, 0), linewidth=1, style=plot.style_linebr)
+plot(plotSL,    "SL",    color=color.new(color.red, 0), linewidth=1, style=plot.style_linebr)
+plot(plotTP,    "TP",    color=color.new(color.green, 0), linewidth=1, style=plot.style_linebr)
+
+// =====================================================
+// Avg9 Label at Specified Time
+// =====================================================
+bdHour   = hour(time, "Asia/Dhaka")
+bdMinute = minute(time, "Asia/Dhaka")
+
+isTarget = (bdHour == avgHour and bdMinute == avgMinute)
+
+if isTarget and not na(avg9)
+    label.new(bar_index, high, text=str.tostring(avg9, "#.##"), style=label.style_label_down, textcolor=color.white)
