@@ -1,5 +1,5 @@
 //@version=5
-strategy("Golden Time by @imriazul", overlay=true)
+strategy("Golden Time with Avg9 Overlay by @imriazul", overlay=true)
 
 // =====================================================
 // USER INPUTS
@@ -11,6 +11,10 @@ useManualSL = input.bool(true, "Use Manual SL ONLY")
 manualSL    = input.float(10.0, "Manual SL (Points)", step=0.1)
 
 tpMultiplier = input.float(2, "TP Multiplier")
+
+// Avg9 Inputs
+avgHour   = input.int(7, "Avg9 Hour (BD)")
+avgMinute = input.int(10, "Avg9 Minute (BD)")
 
 // =====================================================
 // TIMEZONE & TIME EXTRACTION
@@ -64,7 +68,7 @@ if ta.change(time("D"))
         line.delete(tpLine)
 
 // =====================================================
-// CANCEL ORDERS OUTSIDE TIME WINDOW (CRITICAL)
+// CANCEL ORDERS OUTSIDE TIME WINDOW
 // =====================================================
 if not isInWindow
     strategy.cancel("Long")
@@ -75,7 +79,7 @@ if not isInWindow
 // =====================================================
 if isEntryCandle and isInWindow and not na(slValue)
 
-    // Remove previous lines (safety)
+    // Remove previous lines
     if not na(entryLine)
         line.delete(entryLine)
     if not na(slLine)
@@ -118,3 +122,14 @@ if isEntryCandle and isInWindow and not na(slValue)
 
         tpLine := line.new(bar_index, tpP, bar_index + 1, tpP,
              extend=extend.right, color=color.green, width=2)
+
+// =====================================================
+// Avg9 Label at Specified Time
+// =====================================================
+bdHour   = hour(time, "Asia/Dhaka")
+bdMinute = minute(time, "Asia/Dhaka")
+
+isTarget = (bdHour == avgHour and bdMinute == avgMinute)
+
+if isTarget and not na(avg9)
+    label.new(bar_index, high, text=str.tostring(avg9, "#.##"), style=label.style_label_down, textcolor=color.white)
