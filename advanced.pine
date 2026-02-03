@@ -1,0 +1,137 @@
+//@version=5
+indicator("Gold label indicator by @imriazul", overlay=true)
+
+//==================== SETTINGS ====================
+useDST        = input.bool(true, "DST", tooltip="Daylight Saving Time ON/OFF")
+showBoxSystem = input.bool(true, "Show Box System")
+keepBoxes     = input.int(7, "Keep last N days boxes", minval=1, maxval=300)
+
+// RANGE MODE
+rangeMode = input.string( "AUTO", title="Range Calculation Mode", options=["AUTO", "MANUAL"], tooltip="AUTO = Volatility based (5m) | MANUAL = Fixed GRSN")
+
+// MANUAL GRSN
+manualGRSN = input.float(0.105, "GRSN Value (Manual)", step=0.01, minval=0.0)
+
+// COLORS
+boxBorderCol  = input.color(#0080ff, "Box Border Color")
+boxFillCol    = input.color(#ff990000, "Box Fill Color")
+midCol        = input.color(#0080ff, "Mid Line Color")
+col37         = input.color(#ff042af2, "37.5% Line Color")
+col62         = input.color(#0d821aeb, "62.5% Line Color")
+
+//==================== TIME (DHAKA) ====================
+dhakaHour   = hour(time, "Asia/Dhaka")
+dhakaMinute = minute(time, "Asia/Dhaka")
+
+targetHour   = useDST ? 6 : 7
+isTargetTime = (dhakaHour == targetHour and dhakaMinute == 0)
+
+//==================== SYMBOL CHECK ====================
+isGoldChart = syminfo.ticker == "XAUUSD" or syminfo.ticker == "GOLD" or str.contains(syminfo.ticker, "XAU")
+
+//==================== AUTO RANGE (5m ONLY) ====================
+f_autoGRSN_5m() =>
+    candleSize = high - low
+    avgRange   = ta.sma(candleSize, 9)
+    avgRange / 100
+
+autoGRSN_5m = request.security( syminfo.tickerid, "5", f_autoGRSN_5m(), barmerge.gaps_off, barmerge.lookahead_off)
+
+//==================== LOCKED RANGE ====================
+var float lockedGRSN = na
+
+if isTargetTime
+    lockedGRSN := rangeMode == "AUTO" ? autoGRSN_5m : manualGRSN
+
+imriazul = lockedGRSN
+
+//==================== EMAs ====================
+ema9  = ta.ema(close, 9)
+ema15 = ta.ema(close, 15)
+ema21 = ta.ema(close, 21)
+
+plot(ema9,  "EMA 9",  color=#2e30317a, linewidth=1)
+plot(ema15, "EMA 15", color=#2e30317a, linewidth=1)
+plot(ema21, "EMA 21", color=#2b00ff, linewidth=1)
+
+//==================== RANGE VARS ====================
+var float openingValue = na
+var float rangUp       = na
+var float rangDown     = na
+var float level37_5    = na
+var float level62_5    = na
+var float extUpMid     = na
+var float extDownMid   = na
+var float newHigh      = na
+var float newLow       = na
+
+//==================== BOX STORAGE ====================
+var box[]  boxes = array.new_box()
+var line[] mids  = array.new_line()
+var line[] l37s  = array.new_line()
+var line[] l62s  = array.new_line()
+
+f_trimHistory() =>
+    while array.size(boxes) > keepBoxes
+        box.delete(array.shift(boxes))
+    while array.size(mids) > keepBoxes
+        line.delete(array.shift(mids))
+    while array.size(l37s) > keepBoxes
+        line.delete(array.shift(l37s))
+    while array.size(l62s) > keepBoxes
+        line.delete(array.shift(l62s))
+
+f_endTs_8am_dhaka(_t) =>
+    y = year(_t, "Asia/Dhaka")
+    m = month(_t, "Asia/Dhaka")
+    d = dayofmonth(_t, "Asia/Dhaka")
+    timestamp("Asia/Dhaka", y, m, d, 8, 0)
+
+//==================== BUILD RANGE (ONCE PER DAY) ====================
+if isGoldChart and isTargetTime and not na(imriazul)
+    openingValue := open
+
+    sqrtVal  = math.sqrt(openingValue)
+    forUp    = sqrtVal + imriazul
+    forDown  = sqrtVal - imriazul
+
+    rangUp   := forUp * forUp
+    rangDown := forDown * forDown
+
+    rangeDiff = rangUp - rangDown
+    level37_5 := rangDown + rangeDiff * 0.375
+    level62_5 := rangDown + rangeDiff * 0.625
+
+    innerH = level62_5 - level37_5
+    extH   = innerH * 2.0
+
+    extUpMid   := rangUp + (extH / 2.0)
+    extDownMid := rangDown - (extH / 2.0)
+
+    newHigh := rangUp + (rangUp - level37_5)
+    newLow  := rangDown - (level62_5 - rangDown)
+
+    if showBoxSystem
+        endTs    = f_endTs_8am_dhaka(time)
+        midPrice = (rangUp + rangDown) / 2.0
+
+        b   = box.new(time, rangUp, endTs, rangDown, xloc=xloc.bar_time, border_color=boxBorderCol, bgcolor=boxFillCol)
+        lm  = line.new(time, midPrice, endTs, midPrice, xloc=xloc.bar_time, color=midCol)
+        l37 = line.new(time, level37_5, endTs, level37_5, xloc=xloc.bar_time, color=col37)
+        l62 = line.new(time, level62_5, endTs, level62_5, xloc=xloc.bar_time, color=col62)
+
+        array.push(boxes, b)
+        array.push(mids, lm)
+        array.push(l37s, l37)
+        array.push(l62s, l62)
+        f_trimHistory()
+
+//==================== PLOTS ====================
+plot(level37_5, "Level 37.5%", linewidth=1, style=plot.style_linebr)
+plot(level62_5, "Level 62.5%", linewidth=1, style=plot.style_linebr)
+
+plot(extUpMid,   "Ext Up Mid (Base TP)",   color=#787b86e6, linewidth=1, style=plot.style_linebr)
+plot(extDownMid, "Ext Down Mid (Base TP)", color=#787b86e6, linewidth=1, style=plot.style_linebr)
+
+plot(newHigh, "New High", color=#787b86e6, linewidth=1, style=plot.style_linebr)
+plot(newLow,  "New Low",  color=#787b86e6, linewidth=1, style=plot.style_linebr)
