@@ -10,7 +10,7 @@ keepBoxes = input.int(7, 'Keep last N days boxes', minval = 1, maxval = 300)
 rangeMode = input.string('AUTO', title = 'Range Calculation Mode', options = ['AUTO', 'MANUAL'], tooltip = 'AUTO = Volatility based (5m) | MANUAL = Fixed GRSN')
 
 // MANUAL GRSN
-manualGRSN = input.float(0.105, 'GRSN Value (Manual)', step = 0.01, minval = 0.0)
+manualGRSN = input.float(0.105, 'GRSN Value (Manual)', step = 0.105, minval = 0.0, display = display.none)
 
 // COLORS
 boxBorderCol = input.color(#0080ff, 'Box Border Color')
@@ -27,7 +27,7 @@ targetHour = useDST ? 6 : 7
 isTargetTime = dhakaHour == targetHour and dhakaMinute == 0
 
 //==================== SYMBOL CHECK ====================
-isGoldChart = syminfo.ticker == 'XAUUSD' or syminfo.ticker == 'GOLD' or str.contains(syminfo.ticker, 'XAU')
+isGoldChart = syminfo.ticker == 'XAUUSD' or syminfo.ticker == 'GOLD' or syminfo.ticker == 'GC1!' or str.contains(syminfo.ticker, 'XAU')
 
 //==================== AUTO RANGE (5m ONLY) ====================
 f_autoGRSN_5m() =>
