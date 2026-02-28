@@ -1,0 +1,110 @@
+//@version=6
+strategy("Gold Label Strategy PRO - 1 Trade Per Day",
+     overlay=true,
+     initial_capital=10000,
+     default_qty_type=strategy.percent_of_equity,
+     default_qty_value=10,
+     pyramiding=0)
+
+//==================== SETTINGS ====================
+useDST = input.bool(true, "DST")
+rangeMode = input.string("AUTO", "Range Mode", options=["AUTO","MANUAL"])
+manualGRSN = input.float(0.105, "Manual GRSN", step=0.105)
+
+tpMode = input.string("Base TP", "Take Profit Mode",
+     options=["Base TP","Full TP"])
+
+//==================== TIME (DHAKA) ====================
+dhakaHour = hour(time, "Asia/Dhaka")
+dhakaMinute = minute(time, "Asia/Dhaka")
+targetHour = useDST ? 6 : 7
+isTargetTime = dhakaHour == targetHour and dhakaMinute == 0
+
+//==================== SYMBOL CHECK ====================
+isGoldChart = syminfo.ticker == "XAUUSD" or 
+              syminfo.ticker == "GOLD" or 
+              syminfo.ticker == "GC1!" or 
+              str.contains(syminfo.ticker, "XAU")
+
+//==================== AUTO GRSN ====================
+f_autoGRSN_5m() =>
+    candleSize = high - low
+    avgRange = ta.sma(candleSize, 10)
+    avgRange / 100
+
+autoGRSN_5m = request.security(syminfo.tickerid, "5", f_autoGRSN_5m())
+
+//==================== DAILY LOCK ====================
+var float lockedGRSN = na
+if isTargetTime
+    lockedGRSN := rangeMode == "AUTO" ? autoGRSN_5m : manualGRSN
+
+//==================== RANGE VARS ====================
+var float openingValue = na
+var float rangUp = na
+var float rangDown = na
+var float level37_5 = na
+var float level62_5 = na
+var float extUpMid = na
+var float extDownMid = na
+var float newHigh = na
+var float newLow = na
+
+// 🔒 Trade Lock Variable
+var bool tradedToday = false
+
+//==================== BUILD RANGE ====================
+if isGoldChart and isTargetTime and not na(lockedGRSN)
+
+    tradedToday := false   // RESET DAILY TRADE LOCK
+
+    openingValue := open
+
+    sqrtVal = math.sqrt(openingValue)
+    forUp = sqrtVal + lockedGRSN
+    forDown = sqrtVal - lockedGRSN
+
+    rangUp := forUp * forUp
+    rangDown := forDown * forDown
+
+    rangeDiff = rangUp - rangDown
+    level37_5 := rangDown + rangeDiff * 0.375
+    level62_5 := rangDown + rangeDiff * 0.625
+
+    innerH = level62_5 - level37_5
+    extH = innerH * 2.0
+
+    extUpMid := rangUp + extH / 2.0
+    extDownMid := rangDown - extH / 2.0
+
+    newHigh := rangUp + rangUp - level37_5
+    newLow := rangDown - (level62_5 - rangDown)
+
+//==================== PLOT ====================
+plot(level62_5, "Buy Level", color=color.green, style=plot.style_linebr)
+plot(level37_5, "Sell Level", color=color.red, style=plot.style_linebr)
+
+//==================== 5M CONFIRMATION ====================
+fiveMinClose = request.security(syminfo.tickerid, "5", close)
+
+longCondition  = fiveMinClose > level62_5 and not tradedToday
+shortCondition = fiveMinClose < level37_5 and not tradedToday
+
+//==================== EXECUTION ====================
+if longCondition and strategy.position_size == 0
+    tpPrice = tpMode == "Base TP" ? extUpMid : newHigh
+    strategy.entry("LONG", strategy.long)
+    strategy.exit("LONG TP/SL",
+         from_entry="LONG",
+         stop=level37_5,
+         limit=tpPrice)
+    tradedToday := true
+
+if shortCondition and strategy.position_size == 0
+    tpPrice = tpMode == "Base TP" ? extDownMid : newLow
+    strategy.entry("SHORT", strategy.short)
+    strategy.exit("SHORT TP/SL",
+         from_entry="SHORT",
+         stop=level62_5,
+         limit=tpPrice)
+    tradedToday := true
