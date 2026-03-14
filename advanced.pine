@@ -109,7 +109,7 @@ if isGoldChart and isTargetTime and not na(imriazul)
     extUpMid := rangUp + extH / 2.0
     extDownMid := rangDown - extH / 2.0
 
-    newHigh := rangUp - (level37_5 + rangUp)
+    newHigh := rangUp + (rangUp - level37_5)
     newLow := rangDown - (level62_5 - rangDown)
 
     if showBoxSystem
