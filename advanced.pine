@@ -127,6 +127,22 @@ if isGoldChart and isTargetTime and not na(imriazul)
         array.push(l62s, l62)
         f_trimHistory()
 
+//==================== SESSION BACKGROUND ====================
+// Dhaka Session (6:00 - 8:00)
+dhakaH = hour(time, "Asia/Dhaka")
+dhakaM = minute(time, "Asia/Dhaka")
+
+isDhakaSession = (dhakaH == 6 or dhakaH == 7) or (dhakaH == 8 and dhakaM <= 0)
+// New York Session (9:30 - 11:30)
+nyH = hour(time, "America/New_York")
+nyM = minute(time, "America/New_York")
+
+// isNYSession = (nyH == 9 and nyM >= 30) or (nyH == 10) or (nyH == 11 and nyM <= 30)
+isNYSession = (nyH == 9 and nyM >= 30) or (nyH == 10) or (nyH == 11) or (nyH == 12 and nyM == 0)
+// Trading Hours
+bgcolor(isDhakaSession ? color.new(color.blue, 75) : na)
+bgcolor(isNYSession ? color.new(color.blue, 75) : na)
+
 //==================== PLOTS ====================
 plot(level62_5, 'Buy Level', linewidth = 1, color = #008000, style = plot.style_linebr)
 plot(level37_5, 'Sell Level', linewidth = 1, color = #ff0000, style = plot.style_linebr)
